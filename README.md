@@ -46,13 +46,12 @@ HTML・CSS・JavaScriptを1つの `index.html` にまとめています。イン
 1. GitHubで `minefield` リポジトリを作成します。個人の無料プランでGitHub Pagesを使う場合は、公開（Public）にします。
 2. アップロード用ZIPを展開し、**中のファイルをリポジトリ直下**にアップロードして `main` ブランチにコミットします。ZIP自体や親フォルダをそのままアップロードせず、リポジトリのトップに `index.html` がある状態にします。
 3. リポジトリの **Settings → Pages** を開きます。
-4. **Build and deployment → Source** で **Deploy from a branch** を選びます。
-5. **Branch** を **main**、フォルダを **/ (root)** にして **Save** を押します。
-6. デプロイ完了後、Pages設定画面に表示される公開URLを開きます。
+4. **Build and deployment → Source** で **GitHub Actions** を選びます。このリポジトリでは設定済みです。
+5. **Actions → Deploy GitHub Pages** の実行が成功したら、Pages設定画面に表示される公開URLを開きます。手動で再実行する場合は **Run workflow** を使います。
 
 このリポジトリの公開URLは `https://usaginchaku.github.io/minefield/` です。
 
-独自のビルド設定やGitHub Actionsワークフローは不要です。公開後は `index.html` を更新して `main` にコミットすると反映されます。
+同梱の `.github/workflows/deploy-pages.yml` が公開を自動化します。アプリのビルドや依存パッケージのインストールは不要です。公開後は `index.html` を更新して `main` にコミットすると反映されます。
 
 ## ファイル
 
@@ -61,6 +60,7 @@ index.html   ゲーム本体（CSS・JavaScriptを含む）
 README.md    説明と公開手順
 .nojekyll    Jekyllによる処理を無効化
 .gitignore   OSの一時ファイルなどを除外
+.github/workflows/deploy-pages.yml  GitHub Pagesへの自動公開
 ```
 
 ゲームを変更するときは `index.html` を編集してください。別途ビルドする必要はありません。
