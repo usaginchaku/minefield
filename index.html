@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111914">
+  <title>MINEFIELD — マインスイーパー</title>
+  <style>
+    :root { color-scheme: dark; --bg: #111914; --panel: #19231c; --line: #304033; --muted: #9ba99d; --text: #ecf1e8; --accent: #c1f178; --cell-size: 32px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif; line-height: 1.6; }
+    button, input { font: inherit; }
+    button { cursor: pointer; color: inherit; }
+    button:disabled { opacity: .38; cursor: not-allowed; }
+    button, input, summary { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    .wrap { width: min(1180px, calc(100% - 80px)); margin: auto; }
+    header { padding: 27px 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 800; letter-spacing: 3px; }
+    .logo { width: 30px; height: 30px; color: var(--accent); }
+    .header-note { color: var(--muted); font-size: 12px; letter-spacing: .03em; }
+    .header-note span { display: inline-block; width: 6px; height: 6px; margin-right: 8px; background: var(--accent); border-radius: 50%; }
+    .intro { padding: 38px 0 30px; display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+    .eyebrow { color: var(--accent); font-size: 10px; letter-spacing: 2px; font-weight: 700; margin-bottom: 10px; }
+    h1 { font-size: clamp(24px, 3.2vw, 36px); font-weight: 650; letter-spacing: -.04em; margin: 0; }
+    .intro p { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 22px; align-items: start; }
+    .game { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 23px 24px; gap: 16px; border-bottom: 1px solid var(--line); }
+    .stat + .stat { border-left: 1px solid var(--line); padding-left: 23px; }
+    .stat-label { color: var(--muted); font-size: 11px; display: block; margin-bottom: 4px; }
+    .stat-value { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 31px; line-height: 1.3; font-weight: 500; letter-spacing: -.7px; font-variant-numeric: tabular-nums; }
+    #remaining { color: var(--accent); }
+    .gamebar { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 15px 22px; }
+    .board-info { font-size: 11px; color: var(--muted); }
+    .board-info b { color: var(--text); font-weight: 500; margin-right: 10px; }
+    .tools { display: flex; gap: 6px; }
+    .icon-button { height: 32px; width: 32px; padding: 0; display: grid; place-items: center; background: transparent; border: 1px solid var(--line); border-radius: 7px; font-size: 18px; }
+    .icon-button:hover:not(:disabled) { border-color: var(--accent); background: #263627; }
+    .icon-button[aria-pressed="true"] { border-color: var(--accent); background: #34442c; color: var(--accent); }
+    .board-stage { position: relative; margin: 0 18px; border-radius: 8px; background: #101813; border: 1px solid #26372b; overflow: hidden; }
+    .board-window { overflow: auto; padding: 12px; max-height: 650px; scrollbar-color: #5e735a #111914; scrollbar-width: thin; }
+    .board { width: max-content; display: grid; gap: 3px; margin: 0 auto; padding: 2px; user-select: none; -webkit-user-select: none; }
+    .board-row { display: contents; }
+    .cell { height: var(--cell-size); width: var(--cell-size); padding: 0; display: grid; place-items: center; border: 1px solid #3c4d3a; border-bottom-color: #1d2c20; border-radius: 4px; background: #2e402d; font: 700 calc(var(--cell-size) * .49) / 1 ui-monospace, monospace; position: relative; touch-action: manipulation; }
+    .cell:not(.revealed):not(.flagged):not(.question):not(.mine):not(.wrong)::after { content: ""; width: 3px; height: 3px; background: #7a8c6c; border-radius: 50%; opacity: .45; }
+    .cell:hover:not(.revealed) { background: #455e39; border-color: #77955f; }
+    .cell:focus-visible { z-index: 2; outline-offset: 0; }
+    .cell.revealed { background: #19241b; border-color: #253428; }
+    .cell.flagged { color: var(--accent); }
+    .cell.question { color: #d8bd89; }
+    .cell.mine { background: #4b3430; color: #f4aa98; border-color: #724538; }
+    .cell.detonated { background: #e3977b; color: #2a1c17; }
+    .cell.wrong { color: #f5a694; background: #382b26; }
+    .cell[data-number="1"] { color: #8ebdff; } .cell[data-number="2"] { color: #b1d891; }
+    .cell[data-number="3"] { color: #edaa82; } .cell[data-number="4"] { color: #c8adf9; }
+    .cell[data-number="5"] { color: #ed9bb3; } .cell[data-number="6"] { color: #7bd6ce; }
+    .cell[data-number="7"] { color: #eddb91; } .cell[data-number="8"] { color: #dce4da; }
+    .overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; background: #101813; z-index: 3; text-align: center; padding: 15px; }
+    .pause-symbol { font-size: 36px; color: var(--accent); }
+    .overlay h2 { font-size: 19px; margin: 8px 0 2px; }
+    .overlay p { color: var(--muted); font-size: 12px; margin: 0 0 18px; }
+    .status-area { padding: 15px 22px 18px; }
+    .status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 11px; }
+    #status { margin: 0; color: var(--muted); }
+    #progress-text { white-space: nowrap; color: var(--accent); font-family: ui-monospace, monospace; }
+    progress { display: block; margin-top: 12px; width: 100%; height: 3px; border: 0; border-radius: 2px; background: #2e3c2e; accent-color: var(--accent); }
+    progress::-webkit-progress-bar { background: #2e3c2e; } progress::-webkit-progress-value { background: var(--accent); }
+    progress::-moz-progress-bar { background: var(--accent); }
+    .result { margin: 0 18px 18px; border: 1px solid #587243; background: #263520; padding: 18px; border-radius: 10px; display: flex; align-items: center; gap: 15px; }
+    .result[data-outcome="lost"] { background: #30251f; border-color: #654336; }
+    .result-symbol { font-size: 28px; color: var(--accent); }
+    .result h2 { font-size: 18px; margin: 0; }
+    .result p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+    .result .small-button { margin-left: auto; flex-shrink: 0; }
+    .underboard { display: flex; justify-content: space-between; gap: 12px; padding: 13px 3px 0; color: var(--muted); font-size: 10px; }
+    kbd { border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px; font: inherit; color: #d1dbcb; }
+    .side { display: grid; gap: 17px; }
+    .side-panel { border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+    .section-title { font-size: 12px; font-weight: 600; margin: 0 0 14px; display: flex; align-items: center; justify-content: space-between; }
+    .section-title span { font-size: 9px; color: var(--muted); letter-spacing: 1px; font-weight: 400; }
+    .levels { display: grid; gap: 7px; }
+    .level { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 12px; background: transparent; border: 1px solid var(--line); border-radius: 7px; text-align: left; }
+    .level strong { display: block; font-size: 12px; font-weight: 500; }
+    .level small { color: var(--muted); font-size: 10px; }
+    .level .level-mark { color: #75836f; font-size: 12px; letter-spacing: 1px; }
+    .level:hover { background: #233021; }
+    .level[aria-pressed="true"] { background: #26351f; border-color: #9ab965; }
+    .level[aria-pressed="true"] strong, .level[aria-pressed="true"] .level-mark { color: var(--accent); }
+    .custom-button { font-size: 11px; background: none; border: 0; color: var(--muted); padding: 12px 0 0; width: 100%; text-align: center; }
+    .custom-button:hover { color: var(--accent); }
+    .primary { background: var(--accent); border: 1px solid var(--accent); color: #1a2812; border-radius: 8px; padding: 11px 18px; font-size: 12px; font-weight: 700; }
+    .primary:hover { background: #d2ff91; }
+    .new-game { width: 100%; margin-top: 16px; }
+    .mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: #111914; }
+    .mode { background: transparent; border: 0; border-radius: 4px; font-size: 11px; padding: 9px 3px; color: var(--muted); }
+    .mode[aria-pressed="true"] { background: #34442c; color: var(--accent); }
+    .hint { width: 100%; background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 10px 8px; margin-top: 11px; font-size: 11px; }
+    .hint:hover:not(:disabled) { border-color: #8fa676; }
+    .micro { color: var(--muted); font-size: 10px; line-height: 1.8; margin: 10px 0 0; }
+    .assist-badge { color: #e1be7d; font-size: 10px; margin-top: 8px; }
+    .zoom-row { margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
+    .zoom-actions { display: flex; gap: 8px; align-items: center; }
+    #zoom-value { min-width: 31px; text-align: center; font-size: 10px; }
+    .zoom-actions .icon-button { height: 25px; width: 25px; font-size: 16px; }
+    details summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+    .instructions { padding: 10px 0 0; margin: 0; list-style: none; font-size: 11px; color: var(--muted); }
+    .instructions li { margin-top: 9px; }
+    .instructions b { font-weight: 500; color: #dbe3d7; }
+    .record-line { display: flex; justify-content: space-between; font-size: 11px; margin-top: 11px; color: var(--muted); }
+    .record-line strong { color: var(--text); font-weight: 500; }
+    footer { border-top: 1px solid var(--line); display: flex; gap: 15px; justify-content: space-between; margin-top: 38px; padding: 20px 0 25px; color: #8b9b8b; font-size: 10px; }
+    footer a { color: inherit; }
+    dialog { width: min(430px, calc(100% - 32px)); border: 1px solid #53664a; border-radius: 14px; background: var(--panel); color: var(--text); padding: 26px; }
+    dialog::backdrop { background: #070c09bf; backdrop-filter: blur(4px); }
+    dialog h2 { margin: 0 0 5px; font-size: 20px; }
+    dialog p { color: var(--muted); font-size: 12px; }
+    .custom-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 22px 0 10px; }
+    .custom-fields label { font-size: 11px; color: var(--muted); }
+    .custom-fields input { display: block; width: 100%; margin-top: 6px; padding: 10px; color: var(--text); background: var(--bg); border: 1px solid #56644e; border-radius: 6px; }
+    .dialog-actions { display: flex; justify-content: end; gap: 10px; margin-top: 22px; }
+    .small-button { background: transparent; border: 1px solid #657553; border-radius: 7px; padding: 8px 12px; font-size: 11px; }
+    .small-button:hover { background: #34432a; }
+    #custom-error { color: #f3ac96; font-size: 11px; }
+    @media (min-width: 1400px) { .wrap { width: 1220px; } }
+    @media (max-width: 900px) { .wrap { width: calc(100% - 40px); } .layout { grid-template-columns: minmax(0, 1fr) 230px; gap: 16px; } .intro { align-items: start; flex-direction: column; gap: 8px; } .side-panel { padding: 15px; } .stats { padding: 20px 18px; } .stat + .stat { padding-left: 16px; } .stat-value { font-size: 27px; } }
+    @media (max-width: 680px) { .wrap { width: calc(100% - 28px); } header { padding: 19px 0; } .brand { font-size: 16px; letter-spacing: 2px; } .header-note { font-size: 10px; } .intro { padding: 25px 0 22px; } .intro p { font-size: 11px; } .layout { grid-template-columns: minmax(0, 1fr); } .side { grid-template-columns: 1fr 1fr; gap: 12px; } .side-panel { min-width: 0; padding: 13px; } .difficulty-panel { grid-column: 1 / -1; } .levels { grid-template-columns: repeat(4, 1fr); gap: 5px; } .level { padding: 9px 7px; } .level small { font-size: 9px; } .level .level-mark { display: none; } .level strong { font-size: 11px; } .new-game { margin-top: 12px; } .side .help-panel { grid-column: 1 / -1; } .record-panel { grid-column: 2; grid-row: 2; } .gamebar { padding: 13px 14px; } .board-stage { margin: 0 10px; } .board-window { padding: 8px; max-height: 60svh; } .stats { padding: 18px 15px; gap: 10px; } .stat + .stat { padding-left: 14px; } .stat-value { font-size: 25px; } .stat-label { font-size: 10px; } .status-area { padding: 13px 14px 16px; } .underboard { font-size: 9px; flex-wrap: wrap; } .status-row { font-size: 10px; } footer { margin-top: 26px; flex-wrap: wrap; } .result { margin: 0 10px 12px; padding: 14px; gap: 10px; flex-wrap: wrap; } .result h2 { font-size: 17px; } }
+    @media (max-width: 480px) { .side { grid-template-columns: minmax(0, 1fr); } .record-panel { grid-column: 1; grid-row: auto; } }
+    @media (prefers-reduced-motion: no-preference) { button { transition: background .12s, border-color .12s; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M16 1v6m0 18v6M1 16h6m18 0h6M5.4 5.4l4.3 4.3m12.6 12.6 4.3 4.3M5.4 26.6l4.3-4.3M22.3 9.7l4.3-4.3"/><circle cx="16" cy="16" r="9"/></g><circle cx="13" cy="13" r="2" fill="currentColor"/></svg>MINEFIELD</div>
+      <div class="header-note"><span></span>小さなマス、大きな頭脳戦。</div>
+    </header>
+    <section class="intro" aria-labelledby="title">
+      <div><div class="eyebrow">A LITTLE LOGIC. A LITTLE COURAGE.</div><h1 id="title">一手ずつ、見抜こう。</h1></div>
+      <p>数字を頼りに、地雷のないマスをすべて開こう。<br>最初の一手と、その周囲8マスは安全です。</p>
+    </section>
+    <main class="layout">
+      <section class="game-column" aria-label="マインスイーパー">
+        <div class="game">
+          <div class="stats">
+            <div class="stat"><span class="stat-label">⚑ 地雷の数 − 旗の数</span><span id="remaining" class="stat-value">040</span></div>
+            <div class="stat"><span class="stat-label">◷ タイム</span><span id="timer" class="stat-value">00:00</span></div>
+            <div class="stat"><span class="stat-label">♧ ベストタイム</span><span id="best" class="stat-value">—</span></div>
+          </div>
+          <div class="gamebar">
+            <div class="board-info"><b id="level-name">中級</b><span id="board-size">16 × 16</span><span id="assist-indicator" class="assist-badge" hidden> ・ ヒント使用</span></div>
+            <div class="tools"><button id="quick-flag-mode" class="icon-button" aria-label="旗モード" aria-pressed="false" title="クリック・タップで旗を立てる">⚑</button><button id="pause" class="icon-button" aria-label="一時停止" title="一時停止 (P)" disabled>Ⅱ</button><button id="restart" class="icon-button" aria-label="新しい盤面でやり直す" title="新しい盤面でやり直す">↻</button></div>
+          </div>
+          <div class="board-stage">
+            <div class="board-window" id="board-window"><div id="board" class="board" role="grid" aria-label="地雷原" aria-describedby="keyboard-help"></div></div>
+            <div id="pause-overlay" class="overlay" hidden><span class="pause-symbol" aria-hidden="true">Ⅱ</span><h2>ひと休み。</h2><p>タイマーも止めてあります。</p><button id="resume" class="primary">つづける</button></div>
+          </div>
+          <div class="status-area"><div class="status-row"><p id="status" role="status">好きなマスから、はじめよう。</p><span id="progress-text">0 / 216</span></div><progress id="progress" value="0" max="216" aria-label="安全なマスの開封率"></progress></div>
+          <div class="result" id="result" role="status" hidden><span id="result-symbol" class="result-symbol" aria-hidden="true">✦</span><div><h2 id="result-title"></h2><p id="result-detail"></p></div><button id="play-again" class="small-button">もう一戦 ↗</button></div>
+        </div>
+        <div class="underboard"><span>左クリック：開く ／ 右クリック：旗 → ? → 解除</span><span id="keyboard-help">移動 <kbd>矢印</kbd>　開く <kbd>Space</kbd>　旗 <kbd>F</kbd></span></div>
+      </section>
+      <aside class="side" aria-label="ゲーム設定">
+        <section class="side-panel difficulty-panel"><h2 class="section-title">難易度<span>CHOOSE YOUR FIELD</span></h2><div class="levels">
+          <button class="level" data-level="beginner" aria-pressed="false"><span><strong>初級</strong><small>9 × 9 · 10個</small></span><span class="level-mark" aria-hidden="true">Ⅰ</span></button>
+          <button class="level" data-level="intermediate" aria-pressed="true"><span><strong>中級</strong><small>16 × 16 · 40個</small></span><span class="level-mark" aria-hidden="true">Ⅱ</span></button>
+          <button class="level" data-level="expert" aria-pressed="false"><span><strong>上級</strong><small>30 × 16 · 99個</small></span><span class="level-mark" aria-hidden="true">Ⅲ</span></button>
+          <button class="level" data-level="extreme" aria-pressed="false"><span><strong>超上級</strong><small>40 × 24 · 240個</small></span><span class="level-mark" aria-hidden="true">Ⅳ</span></button>
+        </div><button id="custom-open" class="custom-button">＋ 自分だけの盤面をつくる</button><button id="new-game" class="primary new-game">↻ 新しいゲーム</button><p class="micro">難易度を変えると、新しいゲームが始まります。</p></section>
+        <section class="side-panel"><h2 class="section-title">操作モード<span>CONTROLS</span></h2><div class="mode-switch" role="group" aria-label="クリック・タップの操作"><button class="mode" id="reveal-mode" aria-pressed="true">⌖ 開く</button><button class="mode" id="flag-mode" aria-pressed="false">⚑ 旗を立てる</button></div><button class="hint" id="hint" title="安全なマスを1つ開きます。使用した回はベスト記録の対象外です。">✧ 安全なマスをひとつ開く</button><p class="micro">スマホでは旗モードが便利。<br>ヒントを使った回はベスト記録の対象外です。</p><div class="zoom-row"><span>マスの大きさ</span><div class="zoom-actions"><button id="zoom-out" class="icon-button" aria-label="マスを縮小">−</button><span id="zoom-value">32px</span><button id="zoom-in" class="icon-button" aria-label="マスを拡大">＋</button></div></div></section>
+        <section class="side-panel help-panel"><details><summary>遊び方・ショートカット</summary><ul class="instructions"><li><b>数字は、周囲8マスにある地雷の数。</b><br>地雷の位置に旗を立て、安全なマスを開こう。</li><li><b>数字をもう一度クリック</b><br>周囲の旗が数字と同じ数なら、残りをまとめて開きます。旗が間違っていると爆発するので注意。</li><li><b>キーボードでも遊べます</b><br>矢印で移動、Space / Enter で開く、F で旗、P で一時停止。</li><li>広い盤面はスクロールできます。推理だけでは決まらず、予想が必要な場合もあります。</li></ul></details></section>
+        <section class="side-panel record-panel"><h2 class="section-title">これまでの記録<span>YOUR STATS</span></h2><div class="record-line"><span>プレイ数</span><strong id="plays">0</strong></div><div class="record-line"><span>クリア数（ヒント含む）</span><strong id="wins">0</strong></div><div class="record-line"><span>クリア率</span><strong id="win-rate">—</strong></div><p class="micro" id="storage-note">記録はこのブラウザに保存されます。</p></section>
+      </aside>
+    </main>
+    <footer><span>MINEFIELD · じっくり考える、小さな時間。</span><span>インストール不要・オフラインで遊べます</span></footer>
+  </div>
+  <dialog id="custom-dialog" aria-labelledby="custom-title"><form id="custom-form"><h2 id="custom-title">自分だけの地雷原。</h2><p>広さと地雷の数を決めて、挑戦しよう。</p><div class="custom-fields"><label>横（8〜50）<input id="custom-cols" type="number" min="8" max="50" step="1" value="20" required></label><label>縦（8〜40）<input id="custom-rows" type="number" min="8" max="40" step="1" value="16" required></label><label>地雷の数<input id="custom-mines" type="number" min="1" max="112" step="1" value="60" required></label></div><p id="density">地雷は全体の35%まで設定できます。</p><p id="custom-error" role="alert"></p><div class="dialog-actions"><button type="button" id="custom-cancel" class="small-button">キャンセル</button><button type="submit" class="primary">この盤面で遊ぶ</button></div></form></dialog>
+  <noscript><p style="padding:24px;text-align:center">このマインスイーパーで遊ぶには、ブラウザのJavaScriptを有効にしてください。</p></noscript>
+  <script>
+/* DOM-independent game rules. The first opened cell and its neighbors are safe. */
+class Minesweeper {
+  constructor(rows, cols, mines, random = Math.random) {
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 8 || cols < 8 || rows > 50 || cols > 50) {
+      throw new RangeError('盤面の縦・横は8〜50の整数にしてください。');
+    }
+    const total = rows * cols;
+    if (!Number.isInteger(mines) || mines < 1 || mines > Math.min(total - 9, Math.floor(total * 0.35))) {
+      throw new RangeError('地雷は1個以上、全マスの35%以下にしてください。');
+    }
+    if (typeof random !== 'function') throw new TypeError('random must be a function');
+    this.rows = rows;
+    this.cols = cols;
+    this.mineCount = mines;
+    this.random = random;
+    this.cells = Array.from({ length: total }, () => ({ mine: false, adjacent: 0, revealed: false, mark: 0 }));
+    this.state = 'ready';
+    this.revealedCount = 0;
+    this.flagCount = 0;
+    this.detonatedIndex = -1;
+  }
+
+  neighbors(index) {
+    if (!this._valid(index)) return [];
+    const row = Math.floor(index / this.cols);
+    const col = index % this.cols;
+    const result = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = row + dr;
+        const c = col + dc;
+        if ((dr || dc) && r >= 0 && r < this.rows && c >= 0 && c < this.cols) result.push(r * this.cols + c);
+      }
+    }
+    return result;
+  }
+
+  reveal(index) {
+    if (!this._active() || !this._valid(index)) return false;
+    const cell = this.cells[index];
+    if (cell.revealed || cell.mark === 1) return false;
+    if (this.state === 'ready') this._generate(index);
+    return this._open([index]);
+  }
+
+  cycleMark(index) {
+    if (!this._active() || !this._valid(index) || this.cells[index].revealed) return false;
+    const cell = this.cells[index];
+    if (cell.mark === 1) this.flagCount--;
+    cell.mark = (cell.mark + 1) % 3;
+    if (cell.mark === 1) this.flagCount++;
+    return true;
+  }
+
+  chord(index) {
+    if (this.state !== 'playing' || !this._valid(index)) return false;
+    const cell = this.cells[index];
+    if (!cell.revealed || cell.mine) return false;
+    const around = this.neighbors(index);
+    if (around.filter(i => this.cells[i].mark === 1).length !== cell.adjacent) return false;
+    return this._open(around.filter(i => !this.cells[i].revealed && this.cells[i].mark !== 1));
+  }
+
+  revealSafeHint() {
+    if (!this._active()) return false;
+    if (this.state === 'ready') {
+      const center = Math.floor(this.rows / 2) * this.cols + Math.floor(this.cols / 2);
+      const index = this.cells[center].mark !== 1 ? center : this.cells.findIndex(cell => cell.mark !== 1);
+      return index >= 0 ? this.reveal(index) : false;
+    }
+    const candidates = [];
+    for (let i = 0; i < this.cells.length; i++) {
+      const cell = this.cells[i];
+      if (!cell.mine && !cell.revealed && cell.mark !== 1) candidates.push(i);
+    }
+    const frontier = candidates.find(i => this.neighbors(i).some(n => this.cells[n].revealed));
+    const index = frontier === undefined ? candidates[0] : frontier;
+    return index === undefined ? false : this.reveal(index);
+  }
+
+  _valid(index) {
+    return Number.isInteger(index) && index >= 0 && index < this.cells.length;
+  }
+
+  _active() {
+    return this.state === 'ready' || this.state === 'playing';
+  }
+
+  _generate(first) {
+    const safe = new Set([first, ...this.neighbors(first)]);
+    const candidates = this.cells.map((_, index) => index).filter(index => !safe.has(index));
+    // Partial Fisher–Yates gives each eligible mine layout the same probability.
+    for (let i = 0; i < this.mineCount; i++) {
+      const value = this.random();
+      if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError('random must return a number in [0, 1)');
+      const j = i + Math.floor(value * (candidates.length - i));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    for (let i = 0; i < this.mineCount; i++) this.cells[candidates[i]].mine = true;
+    for (let i = 0; i < this.cells.length; i++) {
+      if (this.cells[i].mine) {
+        for (const neighbor of this.neighbors(i)) this.cells[neighbor].adjacent++;
+      }
+    }
+    this.state = 'playing';
+  }
+
+  _open(indices) {
+    const queue = [...indices];
+    let changed = false;
+    // Iteration avoids recursive stack overflow on large, mostly empty boards.
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      const index = queue[cursor];
+      const cell = this.cells[index];
+      if (cell.revealed || cell.mark === 1) continue;
+      cell.revealed = true;
+      cell.mark = 0;
+      changed = true;
+      if (cell.mine) {
+        this.detonatedIndex = index;
+        this.state = 'lost';
+        return true;
+      }
+      this.revealedCount++;
+      if (cell.adjacent === 0) queue.push(...this.neighbors(index));
+    }
+    if (this.revealedCount === this.cells.length - this.mineCount) {
+      this.state = 'won';
+      for (const cell of this.cells) if (cell.mine) cell.mark = 1;
+      this.flagCount = this.mineCount;
+    }
+    return changed;
+  }
+}
+
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const presets = {
+  beginner: { rows: 9, cols: 9, mines: 10, name: '初級' },
+  intermediate: { rows: 16, cols: 16, mines: 40, name: '中級' },
+  expert: { rows: 16, cols: 30, mines: 99, name: '上級' },
+  extreme: { rows: 24, cols: 40, mines: 240, name: '超上級' }
+};
+const storageKey = 'minefield.records.v1';
+let storageAvailable = true;
+let records = { plays: 0, wins: 0, best: {} };
+let storedText = null;
+try { storedText = localStorage.getItem(storageKey); }
+catch { storageAvailable = false; }
+try {
+  const stored = JSON.parse(storedText || 'null');
+  if (stored && typeof stored === 'object') {
+    if (Number.isSafeInteger(stored.plays) && stored.plays >= 0) records.plays = stored.plays;
+    if (Number.isSafeInteger(stored.wins) && stored.wins >= 0) records.wins = Math.min(stored.wins, records.plays);
+    if (stored.best && typeof stored.best === 'object') {
+      for (const [key, value] of Object.entries(stored.best)) {
+        if (/^\d+x\d+x\d+$/.test(key) && Number.isFinite(value) && value >= 0) records.best[key] = value;
+      }
+    }
+  }
+} catch { /* Ignore malformed old records; a new game replaces them. */ }
+
+let game;
+let config = { ...presets.intermediate, level: 'intermediate' };
+let paused = false;
+let flagMode = false;
+let assisted = false;
+let hintCount = 0;
+let accumulatedMs = 0;
+let startedAt = null;
+let focusIndex = 0;
+let cellSize = 32;
+let buttons = [];
+let statusText = '';
+let bestImproved = false;
+
+function recordKey() { return `${config.rows}x${config.cols}x${config.mines}`; }
+function timeMs() { return accumulatedMs + (startedAt === null ? 0 : performance.now() - startedAt); }
+function formatTime(ms) {
+  const seconds = Math.floor(ms / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+function saveRecords() {
+  try { localStorage.setItem(storageKey, JSON.stringify(records)); storageAvailable = true; }
+  catch { storageAvailable = false; }
+}
+function renderRecords() {
+  const best = records.best[recordKey()];
+  $('best').textContent = best === undefined ? '—' : formatTime(best);
+  $('plays').textContent = records.plays;
+  $('wins').textContent = records.wins;
+  $('win-rate').textContent = records.plays ? `${Math.round(records.wins / records.plays * 100)}%` : '—';
+  $('storage-note').textContent = storageAvailable ? '記録はこのブラウザに保存されます。' : '保存機能が使えないため、記録はこの画面を開いている間のみ残ります。';
+}
+
+function newGame(nextConfig = config) {
+  config = { ...nextConfig };
+  game = new Minesweeper(config.rows, config.cols, config.mines);
+  paused = false;
+  assisted = false;
+  hintCount = 0;
+  accumulatedMs = 0;
+  startedAt = null;
+  bestImproved = false;
+  focusIndex = 0;
+  statusText = '好きなマスから、はじめよう。';
+  setMode(false);
+  $('result').hidden = true;
+  $('pause-overlay').hidden = true;
+  $('pause').textContent = 'Ⅱ';
+  $('pause').setAttribute('aria-label', '一時停止');
+  $('pause').title = '一時停止 (P)';
+  $('board').inert = false;
+  $('board').removeAttribute('aria-hidden');
+  $('board').style.visibility = '';
+  $('board').style.gridTemplateColumns = `repeat(${config.cols}, var(--cell-size))`;
+  $('board').setAttribute('aria-rowcount', config.rows);
+  $('board').setAttribute('aria-colcount', config.cols);
+  $('board').setAttribute('aria-label', `${config.name}の地雷原、${config.rows}行${config.cols}列`);
+  $('level-name').textContent = config.name;
+  $('board-size').textContent = `${config.cols} × ${config.rows} · 地雷 ${config.mines}個`;
+  document.querySelectorAll('[data-level]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.level === config.level)));
+  const fragment = document.createDocumentFragment();
+  buttons = [];
+  for (let row = 0; row < config.rows; row++) {
+    const rowElement = document.createElement('div');
+    rowElement.className = 'board-row';
+    rowElement.setAttribute('role', 'row');
+    for (let col = 0; col < config.cols; col++) {
+      const index = row * config.cols + col;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cell';
+      button.dataset.index = index;
+      button.tabIndex = index === 0 ? 0 : -1;
+      button.setAttribute('role', 'gridcell');
+      button.setAttribute('aria-rowindex', row + 1);
+      button.setAttribute('aria-colindex', col + 1);
+      rowElement.append(button);
+      buttons.push(button);
+    }
+    fragment.append(rowElement);
+  }
+  $('board').replaceChildren(fragment);
+  $('board-window').scrollTop = 0;
+  $('board-window').scrollLeft = 0;
+  render();
+}
+
+function render() {
+  const terminal = game.state === 'won' || game.state === 'lost';
+  game.cells.forEach((cell, index) => {
+    const button = buttons[index];
+    let text = '', state = '未開封', classes = 'cell';
+    button.removeAttribute('data-number');
+    if (game.state === 'lost' && cell.mine) {
+      classes += ' mine';
+      text = cell.mark === 1 ? '⚑' : '✹';
+      state = cell.mark === 1 ? '正しく旗を立てた地雷' : '地雷';
+      if (index === game.detonatedIndex) { classes += ' detonated'; state = '踏んだ地雷'; }
+    } else if (game.state === 'lost' && cell.mark === 1 && !cell.mine) {
+      classes += ' wrong'; text = '×'; state = '旗の位置が間違っていました';
+    } else if (cell.revealed) {
+      classes += ' revealed';
+      text = cell.adjacent ? String(cell.adjacent) : '';
+      state = cell.adjacent ? `周囲に地雷${cell.adjacent}個` : '周囲に地雷なし';
+      button.dataset.number = cell.adjacent;
+    } else if (cell.mark === 1) {
+      classes += ' flagged'; text = '⚑'; state = '旗あり';
+    } else if (cell.mark === 2) {
+      classes += ' question'; text = '?'; state = '疑問符あり';
+    }
+    button.className = classes;
+    button.textContent = text;
+    button.setAttribute('aria-label', `${Math.floor(index / config.cols) + 1}行${index % config.cols + 1}列、${state}`);
+    button.setAttribute('aria-disabled', String(terminal));
+  });
+  const remaining = game.mineCount - game.flagCount;
+  $('remaining').textContent = remaining < 0 ? `−${String(-remaining).padStart(2, '0')}` : String(remaining).padStart(3, '0');
+  $('remaining').setAttribute('aria-label', `地雷の数から旗を引いた数 ${remaining}`);
+  $('timer').textContent = formatTime(timeMs());
+  $('progress').max = game.cells.length - game.mineCount;
+  $('progress').value = game.revealedCount;
+  $('progress-text').textContent = `${game.revealedCount} / ${game.cells.length - game.mineCount}`;
+  $('status').textContent = statusText;
+  $('pause').disabled = game.state !== 'playing';
+  $('hint').disabled = paused || terminal;
+  $('reveal-mode').disabled = paused || terminal;
+  $('flag-mode').disabled = paused || terminal;
+  $('quick-flag-mode').disabled = paused || terminal;
+  $('assist-indicator').hidden = !assisted;
+  renderRecords();
+}
+
+function perform(action, isHint = false) {
+  if (paused || game.state === 'won' || game.state === 'lost') return false;
+  const before = game.state;
+  if (!action()) return false;
+  if (isHint) { assisted = true; hintCount++; }
+  if (before === 'ready' && game.state !== 'ready') {
+    startedAt = performance.now();
+    records.plays++;
+    saveRecords();
+  }
+  statusText = game.state === 'ready' ? '好きなマスを開くとスタート。' : isHint ? `安全なマスを開きました。ヒント使用 ${hintCount}回。` : '数字を手がかりに、安全なマスを探そう。';
+  if (game.state === 'won' || game.state === 'lost') finish();
+  render();
+  return true;
+}
+
+function finish() {
+  accumulatedMs = timeMs();
+  startedAt = null;
+  const won = game.state === 'won';
+  if (won) {
+    records.wins++;
+    const oldBest = records.best[recordKey()];
+    if (!assisted && (oldBest === undefined || accumulatedMs < oldBest)) {
+      records.best[recordKey()] = accumulatedMs;
+      bestImproved = true;
+    }
+  }
+  saveRecords();
+  statusText = won ? 'すべての安全なマスを開きました。' : '地雷を踏みました。盤面を見て、次の一戦へ。';
+  $('result').hidden = false;
+  $('result').dataset.outcome = game.state;
+  $('result-symbol').textContent = won ? '✦' : '✹';
+  $('result-title').textContent = won ? '地雷原、完全クリア。' : '惜しい、そこは地雷。';
+  $('result-detail').textContent = won
+    ? `${formatTime(accumulatedMs)} でクリア。${assisted ? `ヒント ${hintCount}回使用・ベスト記録対象外` : bestImproved ? 'ベストタイム更新！' : 'お見事！'}`
+    : `タイム ${formatTime(accumulatedMs)} · 開いた安全なマス ${game.revealedCount}個`;
+}
+
+function setMode(useFlag) {
+  flagMode = useFlag;
+  $('flag-mode').setAttribute('aria-pressed', String(useFlag));
+  $('reveal-mode').setAttribute('aria-pressed', String(!useFlag));
+  $('quick-flag-mode').setAttribute('aria-pressed', String(useFlag));
+}
+function focusCell(index, moveFocus = true) {
+  if (buttons[focusIndex]) buttons[focusIndex].tabIndex = -1;
+  focusIndex = index;
+  buttons[index].tabIndex = 0;
+  if (moveFocus) buttons[index].focus({ preventScroll: true });
+  if (moveFocus) buttons[index].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function openCell(index) {
+  return perform(() => game.cells[index].revealed ? game.chord(index) : game.reveal(index));
+}
+function pauseGame() {
+  if (game.state !== 'playing') return;
+  paused = !paused;
+  if (paused) { accumulatedMs = timeMs(); startedAt = null; }
+  else startedAt = performance.now();
+  $('pause-overlay').hidden = !paused;
+  $('board').style.visibility = paused ? 'hidden' : '';
+  $('board').inert = paused;
+  if (paused) $('board').setAttribute('aria-hidden', 'true');
+  else $('board').removeAttribute('aria-hidden');
+  $('pause').textContent = paused ? '▷' : 'Ⅱ';
+  $('pause').setAttribute('aria-label', paused ? 'ゲームを再開' : '一時停止');
+  $('pause').title = paused ? 'ゲームを再開 (P)' : '一時停止 (P)';
+  statusText = paused ? '一時停止中。ひと息ついてから、つづけよう。' : '数字を手がかりに、安全なマスを探そう。';
+  render();
+  if (paused) $('resume').focus();
+  else focusCell(focusIndex);
+}
+
+$('board').addEventListener('click', event => {
+  const button = event.target.closest('.cell');
+  if (!button || paused) return;
+  const index = Number(button.dataset.index);
+  focusCell(index, false);
+  if (flagMode) perform(() => game.cycleMark(index));
+  else openCell(index);
+});
+$('board').addEventListener('contextmenu', event => {
+  event.preventDefault();
+  const button = event.target.closest('.cell');
+  if (!button || paused) return;
+  const index = Number(button.dataset.index);
+  focusCell(index, false);
+  perform(() => game.cycleMark(index));
+});
+$('board').addEventListener('keydown', event => {
+  const button = event.target.closest('.cell');
+  if (!button || paused || event.altKey || event.ctrlKey || event.metaKey) return;
+  const index = Number(button.dataset.index);
+  const row = Math.floor(index / config.cols), col = index % config.cols;
+  const moves = {
+    ArrowUp: Math.max(0, row - 1) * config.cols + col,
+    ArrowDown: Math.min(config.rows - 1, row + 1) * config.cols + col,
+    ArrowLeft: row * config.cols + Math.max(0, col - 1),
+    ArrowRight: row * config.cols + Math.min(config.cols - 1, col + 1),
+    Home: row * config.cols,
+    End: row * config.cols + config.cols - 1
+  };
+  if (Object.hasOwn(moves, event.key)) { event.preventDefault(); focusCell(moves[event.key]); }
+  else if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); if (!event.repeat) openCell(index); }
+  else if (event.key.toLowerCase() === 'f') { event.preventDefault(); if (!event.repeat) perform(() => game.cycleMark(index)); }
+});
+document.addEventListener('keydown', event => {
+  if (event.key.toLowerCase() !== 'p' || event.repeat || event.altKey || event.ctrlKey || event.metaKey || $('custom-dialog').open || event.target.matches('input, textarea, select')) return;
+  event.preventDefault();
+  pauseGame();
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && game.state === 'playing' && !paused) pauseGame(); });
+$('pause').addEventListener('click', pauseGame);
+$('resume').addEventListener('click', pauseGame);
+$('reveal-mode').addEventListener('click', () => setMode(false));
+$('flag-mode').addEventListener('click', () => setMode(true));
+$('quick-flag-mode').addEventListener('click', () => setMode(!flagMode));
+$('hint').addEventListener('click', () => {
+  if (!perform(() => game.revealSafeHint(), true) && !paused && game.state !== 'won' && game.state !== 'lost') {
+    statusText = '開ける安全なマスがありません。置いた旗を見直してみよう。';
+    render();
+  }
+});
+for (const id of ['restart', 'new-game', 'play-again']) $(id).addEventListener('click', () => {
+  newGame();
+  if (id === 'play-again') focusCell(0);
+});
+document.querySelectorAll('[data-level]').forEach(button => button.addEventListener('click', () => newGame({ ...presets[button.dataset.level], level: button.dataset.level })));
+
+function changeZoom(delta) {
+  cellSize = Math.max(24, Math.min(48, cellSize + delta));
+  document.documentElement.style.setProperty('--cell-size', `${cellSize}px`);
+  $('zoom-value').textContent = `${cellSize}px`;
+  $('zoom-out').disabled = cellSize === 24;
+  $('zoom-in').disabled = cellSize === 48;
+}
+$('zoom-in').addEventListener('click', () => changeZoom(4));
+$('zoom-out').addEventListener('click', () => changeZoom(-4));
+
+function updateDensity() {
+  const cols = $('custom-cols').valueAsNumber;
+  const rows = $('custom-rows').valueAsNumber;
+  const mines = $('custom-mines').valueAsNumber;
+  if (!Number.isFinite(cols * rows) || cols < 8 || rows < 8) {
+    $('density').textContent = '縦と横のマス数を入力してください。';
+    return;
+  }
+  const max = Math.min(cols * rows - 9, Math.floor(cols * rows * .35));
+  $('custom-mines').max = max;
+  $('density').textContent = `地雷は1〜${max}個まで。${Number.isFinite(mines) ? `現在の密度 ${Math.round(mines / (cols * rows) * 100)}%` : ''}`;
+  $('custom-error').textContent = '';
+}
+$('custom-open').addEventListener('click', () => {
+  if (game.state === 'playing' && !paused) pauseGame();
+  $('custom-cols').value = config.cols;
+  $('custom-rows').value = config.rows;
+  $('custom-mines').value = config.mines;
+  $('custom-error').textContent = '';
+  updateDensity();
+  $('custom-dialog').showModal();
+});
+$('custom-cancel').addEventListener('click', () => $('custom-dialog').close());
+for (const id of ['custom-cols', 'custom-rows', 'custom-mines']) $(id).addEventListener('input', updateDensity);
+$('custom-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const cols = $('custom-cols').valueAsNumber, rows = $('custom-rows').valueAsNumber, mines = $('custom-mines').valueAsNumber;
+  const max = Math.min(rows * cols - 9, Math.floor(rows * cols * .35));
+  if (![cols, rows, mines].every(Number.isInteger) || cols < 8 || cols > 50 || rows < 8 || rows > 40 || mines < 1 || mines > max) {
+    $('custom-error').textContent = 'マス数と地雷数を、表示された範囲の整数で入力してください。';
+    return;
+  }
+  $('custom-dialog').close();
+  newGame({ rows, cols, mines, name: 'カスタム', level: 'custom' });
+});
+
+newGame();
+setInterval(() => { if (startedAt !== null) $('timer').textContent = formatTime(timeMs()); }, 200);
+
+</script>
+</body>
+</html>
